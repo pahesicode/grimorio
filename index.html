@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Widget Relógio e Lua</title>
+<style>
+:root{--bg:#191919;--panel:#111827;--panel2:#202020;--text:#f7f7f7;--muted:#c9c9c9;--line:#2c2c2c}
+*{box-sizing:border-box}
+html,body{margin:0;background:#191919;min-height:100%;}
+body{color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.widget{width:min(100%,560px);margin:auto;padding:16px;background:var(--bg);border-radius:24px}
+.clock-card{background:var(--panel2);border:1px solid var(--line);border-radius:18px;padding:18px;text-align:center;margin-bottom:14px}
+.clock{display:flex;align-items:center;justify-content:center;gap:6px;font-size:44px;font-weight:900;letter-spacing:-2px;font-variant-numeric:tabular-nums}
+.time-box{background:#2b2b2b;border-radius:8px;padding:4px 8px;box-shadow:inset 0 -2px 0 #0005}
+.sep{opacity:.9}.date{margin-top:8px;font-size:13px;color:#eee;text-transform:capitalize}
+.moon-card{background:linear-gradient(160deg,#09111f,#151a28);border-radius:22px;padding:22px 20px;text-align:center;border:1px solid #253148}
+.phase-label{font-size:13px;font-weight:800;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px}
+.percent{font-size:64px;line-height:1;font-weight:200;margin-bottom:18px}
+.moon-wrap{display:flex;justify-content:center;align-items:center;margin:4px 0 14px}
+.moon{width:170px;height:170px;border-radius:50%;background:#d9d9d9;position:relative;overflow:hidden;box-shadow:0 0 26px #fff2}
+.moon::before{content:"";position:absolute;inset:0;background:
+radial-gradient(circle at 28% 34%,#b7b7b7 0 6%,transparent 7%),
+radial-gradient(circle at 63% 26%,#b0b0b0 0 8%,transparent 9%),
+radial-gradient(circle at 54% 63%,#bcbcbc 0 10%,transparent 11%),
+radial-gradient(circle at 25% 72%,#c3c3c3 0 7%,transparent 8%),
+radial-gradient(circle at 80% 60%,#c2c2c2 0 6%,transparent 7%);z-index:2;opacity:.75}
+.shadow{position:absolute;top:0;bottom:0;width:100%;background:#252525;z-index:3;pointer-events:none}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.meta-box{background:#121826;border:1px solid #263047;border-radius:14px;padding:12px}
+.meta-title{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#9ca7bd}
+.meta-value{margin-top:5px;font-size:14px;font-weight:700}
+.footer{margin-top:10px;font-size:11px;color:#9ca7bd;text-align:center}
+@media(max-width:520px){.widget{padding:10px;border-radius:18px}.clock{font-size:34px}.percent{font-size:52px}.moon{width:145px;height:145px}}
+</style>
+</head>
+<body>
+<div class="widget">
+  <div class="clock-card">
+    <div class="clock">
+      <span class="time-box" id="hh">00</span><span class="sep">:</span>
+      <span class="time-box" id="mm">00</span><span class="sep">:</span>
+      <span class="time-box" id="ss">00</span>
+    </div>
+    <div class="date" id="date">carregando...</div>
+  </div>
+  <div class="moon-card">
+    <div class="phase-label" id="phaseName">FASE DA LUA</div>
+    <div class="percent" id="illumination">--%</div>
+    <div class="moon-wrap"><div class="moon"><div class="shadow" id="moonShadow"></div></div></div>
+    <div class="meta">
+      <div class="meta-box"><div class="meta-title">Ciclo lunar</div><div class="meta-value" id="age">-- dias</div></div>
+      <div class="meta-box"><div class="meta-title">Próxima fase</div><div class="meta-value" id="nextPhase">--</div></div>
+    </div>
+    <div class="footer" id="footerDate">Atualização automática</div>
+  </div>
+</div>
+<script>
+const ptDays=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+const ptMonths=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+function pad(n){return String(n).padStart(2,'0')}
+function updateClock(){
+ const d=new Date();
+ hh.textContent=pad(d.getHours()); mm.textContent=pad(d.getMinutes()); ss.textContent=pad(d.getSeconds());
+ date.textContent=`${ptDays[d.getDay()]}, ${d.getDate()} de ${ptMonths[d.getMonth()]} de ${d.getFullYear()}`;
+}
+function moonData(date){
+ const synodic=29.530588853, ref=Date.UTC(2000,0,6,18,14,0);
+ const days=(date.getTime()-ref)/86400000;
+ const age=((days%synodic)+synodic)%synodic, phase=age/synodic;
+ const illumination=(1-Math.cos(2*Math.PI*phase))/2;
+ let name='';
+ if(phase<0.03||phase>=0.97) name='Lua Nova';
+ else if(phase<0.22) name='Lua Crescente';
+ else if(phase<0.28) name='Quarto Crescente';
+ else if(phase<0.47) name='Gibosa Crescente';
+ else if(phase<0.53) name='Lua Cheia';
+ else if(phase<0.72) name='Gibosa Minguante';
+ else if(phase<0.78) name='Quarto Minguante';
+ else name='Lua Minguante';
+ const targets=[{p:.25,n:'Quarto Crescente'},{p:.50,n:'Lua Cheia'},{p:.75,n:'Quarto Minguante'},{p:1,n:'Lua Nova'}];
+ let found=targets.find(t=>t.p>phase)||targets[0];
+ return {age,phase,illumination,name,next:found.n};
+}
+function updateMoon(){
+ const d=new Date(),m=moonData(d),pct=Math.round(m.illumination*100),sh=document.getElementById('moonShadow');
+ phaseName.textContent=m.name.toUpperCase(); illumination.textContent=pct+'%'; age.textContent=m.age.toFixed(1)+' dias'; nextPhase.textContent=m.next;
+ footerDate.textContent=`Fase calculada para ${d.getDate()} de ${ptMonths[d.getMonth()]} de ${d.getFullYear()}`;
+ const p=m.phase;
+ if(p<=0.5){const w=(1-p*2)*100; sh.style.left='0'; sh.style.right='auto'; sh.style.width=Math.abs(w)+'%'; sh.style.borderRadius='50% 0 0 50%';}
+ else{const w=((p-.5)*2)*100; sh.style.right='0'; sh.style.left='auto'; sh.style.width=w+'%'; sh.style.borderRadius='0 50% 50% 0';}
+ if(p>0.47&&p<0.53) sh.style.width='0%';
+ if(p<0.03||p>0.97){sh.style.width='100%';sh.style.left='0';sh.style.right='auto';sh.style.borderRadius='50%'}
+}
+updateClock();updateMoon();setInterval(updateClock,1000);setInterval(updateMoon,60000);
+</script>
+</body></html>
